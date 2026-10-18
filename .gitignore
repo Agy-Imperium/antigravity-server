@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# Distribution & Staging
+dist/
+build/
+*.egg-info/
+.dist_staging/
+antigravity-bypass-client.tar.gz
+antigravity-bypass-client.zip
+client_bundle.tar.gz
+client_bundle.zip
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Diagnostic and service runtime logs
+*.log

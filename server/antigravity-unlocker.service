@@ -1,0 +1,33 @@
+[Unit]
+Description=Antigravity Zero-Privilege Unlocker Daemon
+Documentation=https://github.com/Agy-Imperium/antigravity-unlocker-server
+After=network.target network-online.target systemd-resolved.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/antigravity-unlocker/server/unlocker_daemon.py
+WorkingDirectory=/opt/antigravity-unlocker/server
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=antigravity-unlocker
+
+# Process security & user identity
+# Runs unprivileged as antigravity user with CAP_NET_BIND_SERVICE to bind port 53
+User=antigravity
+Group=ag-dev
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# Resource & Environment Tuning
+LimitNOFILE=65536
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/antigravity/unlocker.env
+
+[Install]
+WantedBy=multi-user.target

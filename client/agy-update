@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# agy-update - Check and apply AGY updates
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -f "$SCRIPT_DIR/updater.py" ]]; then
+    exec python3 "$SCRIPT_DIR/updater.py" "$@"
+elif [[ -f "$REPO_ROOT/client/updater.py" ]]; then
+    exec python3 "$REPO_ROOT/client/updater.py" "$@"
+elif [[ -f "$SCRIPT_DIR/client/updater.py" ]]; then
+    exec python3 "$SCRIPT_DIR/client/updater.py" "$@"
+else
+    exec python3 -m antigravity_unlocker.client.updater.engine "$@"
+fi

@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+# agy-run - Resilient CLI Launcher for Antigravity (Linux/WSL/macOS)
+# --- ANTIGRAVITY ZERO-PRIVILEGE CLI HOOK ---
+# Smartly detects Happ / V2Ray / Clash proxies or routes via Frankfurt VPS.
+# Operates 100% in unprivileged user space. Zero elevated privileges required.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_HOST="${ANTIGRAVITY_SERVER_HOST:-}"
+if [[ -z "$REMOTE_HOST" && -f "$HOME/.antigravity-bypass/server_host.txt" ]]; then
+    REMOTE_HOST="$(head -n 1 "$HOME/.antigravity-bypass/server_host.txt" 2>/dev/null | tr -d '\r\n')"
+fi
+[[ -n "$REMOTE_HOST" ]] || REMOTE_HOST="127.0.0.1"
+REMOTE_PORT="${ANTIGRAVITY_REMOTE_PORT:-48329}"
+
+# 1. Check if running directly on Frankfurt VPS
+IS_VPS=false
+if [[ -f "/etc/systemd/system/antigravity-unlocker.service" ]]; then
+    IS_VPS=true
+fi
+
+# 2. Smart Proxy Resolution
+CHOSEN_PROXY=""
+if [[ "$IS_VPS" = false ]]; then
+    if [[ -n "$AGY_CUSTOM_PROXY" ]]; then
+        CHOSEN_PROXY="$AGY_CUSTOM_PROXY"
+    elif [[ -n "$HTTPS_PROXY" && "$HTTPS_PROXY" != *"${REMOTE_HOST}"* && "$HTTPS_PROXY" != *":10808"* && "$HTTPS_PROXY" != *":10809"* ]]; then
+        CHOSEN_PROXY="$HTTPS_PROXY"
+    elif [[ -n "$HTTP_PROXY" && "$HTTP_PROXY" != *"${REMOTE_HOST}"* && "$HTTP_PROXY" != *":10808"* && "$HTTP_PROXY" != *":10809"* ]]; then
+        CHOSEN_PROXY="$HTTP_PROXY"
+    elif [[ -n "$ALL_PROXY" && "$ALL_PROXY" != *"${REMOTE_HOST}"* && "$ALL_PROXY" != *":10808"* && "$ALL_PROXY" != *":10809"* ]]; then
+        CHOSEN_PROXY="$ALL_PROXY"
+    else
+        # Default fallback to Frankfurt VPS (HTTP CONNECT on 48329)
+        # Avoids third-party VPN inbounds 10808/10809 and provides reliable European egress for Gemini
+        CHOSEN_PROXY="http://${REMOTE_HOST}:${REMOTE_PORT}"
+    fi
+fi
+
+if [[ -n "$CHOSEN_PROXY" ]]; then
+    export HTTPS_PROXY="$CHOSEN_PROXY"
+    export HTTP_PROXY="$CHOSEN_PROXY"
+    export AG_LS_PROXY="$CHOSEN_PROXY"
+    export https_proxy="$CHOSEN_PROXY"
+    export http_proxy="$CHOSEN_PROXY"
+    export NO_PROXY="localhost,127.0.0.1,::1"
+    export no_proxy="localhost,127.0.0.1,::1"
+else
+    unset HTTPS_PROXY HTTP_PROXY AG_LS_PROXY https_proxy http_proxy NO_PROXY no_proxy
+fi
+
+# 3. Terminate stale language server processes to ensure clean proxy inheritance
+pkill -f "language_server" >/dev/null 2>&1 || true
+
+# 4. Locate the official Antigravity CLI binary across standard user directories and PATH
+THIS_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+
+is_real_elf_binary() {
+    local target="$1"
+    [[ -n "$target" && -f "$target" && -x "$target" ]] || return 1
+
+    # Must never resolve to this launcher script or symlink
+    local rtarget
+    rtarget="$(readlink -f "$target" 2>/dev/null || realpath "$target" 2>/dev/null || echo "$target")"
+    if [[ -n "$THIS_SCRIPT" && "$rtarget" == "$THIS_SCRIPT" ]]; then
+        return 1
+    fi
+
+    # Shell or python wrapper scripts start with shebang
+    if head -n 1 "$target" 2>/dev/null | grep -q "^#\!"; then
+        return 1
+    fi
+
+    # Check for ELF binary magic header (\x7fELF)
+    if head -c 4 "$target" 2>/dev/null | grep -q $'\x7fELF'; then
+        return 0
+    fi
+
+    # Fallback to file utility (ELF or Mach-O executable)
+    if command -v file >/dev/null 2>&1; then
+        if file -b "$target" 2>/dev/null | grep -qiE "ELF|Mach-O|executable"; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+AGY_BIN=""
+
+# Step 4a: Prioritize explicit .real binaries and backups
+for candidate in \
+    "$HOME/.local/bin/agy.real" \
+    "$HOME/.gemini/antigravity-cli/bin/agy.real" \
+    "/usr/local/bin/agy.real" \
+    "/root/.local/bin/agy.real" \
+    "$HOME/.local/bin/agy.real.agy_bak" \
+    "$HOME/.local/bin/agy.agy_bak"; do
+    if is_real_elf_binary "$candidate"; then
+        AGY_BIN="$candidate"
+        break
+    fi
+done
+
+# Step 4b: Check standard 'agy' paths (verifying they are compiled binaries, not wrappers)
+if [[ -z "$AGY_BIN" ]]; then
+    for candidate in \
+        "$HOME/.gemini/antigravity-cli/bin/agy" \
+        "$HOME/.local/bin/agy" \
+        "/usr/local/bin/agy" \
+        "/root/.local/bin/agy"; do
+        if is_real_elf_binary "$candidate"; then
+            AGY_BIN="$candidate"
+            break
+        fi
+    done
+fi
+
+# Step 4c: Check PATH via which
+if [[ -z "$AGY_BIN" ]]; then
+    while IFS= read -r p; do
+        if is_real_elf_binary "$p"; then
+            AGY_BIN="$p"
+            break
+        fi
+    done < <(which -a agy.real agy 2>/dev/null || true)
+fi
+
+if [[ -z "$AGY_BIN" ]]; then
+    echo "Error: official Antigravity CLI binary (agy.real) not found in PATH or standard user directories." >&2
+    echo "Please ensure Antigravity CLI is installed (~/.local/bin or ~/.gemini/antigravity-cli/bin)." >&2
+    exit 1
+fi
+
+# 5. Autopatch detection: verify if Google placed a new/updated binary that requires patching
+STAMP_FILE="$HOME/.antigravity-bypass/.patch_stamp"
+NEED_AUTOPATCH=false
+
+if [[ -f "$AGY_BIN" ]]; then
+    CUR_STAT="$(stat -c "%Y %s" "$AGY_BIN" 2>/dev/null || stat -f "%m %z" "$AGY_BIN" 2>/dev/null || echo "")"
+    CACHED_STAT=""
+    if [[ -f "$STAMP_FILE" ]]; then
+        CACHED_STAT="$(head -n 1 "$STAMP_FILE" 2>/dev/null || echo "")"
+    fi
+
+    if [[ -z "$CACHED_STAT" || "$CUR_STAT" != "$CACHED_STAT" ]]; then
+        # Stat changed or no stamp: verify if binary contains unpatched ineligible string
+        if grep -q "ineligible" "$AGY_BIN" 2>/dev/null; then
+            NEED_AUTOPATCH=true
+        else
+            mkdir -p "$(dirname "$STAMP_FILE")" 2>/dev/null || true
+            echo "$CUR_STAT" > "$STAMP_FILE" 2>/dev/null || true
+        fi
+    fi
+fi
+
+if [[ "$NEED_AUTOPATCH" = true ]]; then
+    PATCHER="$SCRIPT_DIR/patch_account.py"
+    [[ -f "$PATCHER" ]] || PATCHER="$HOME/.antigravity-bypass/client/patch_account.py"
+    if [[ -f "$PATCHER" ]]; then
+        python3 "$PATCHER" >/dev/null 2>&1 || true
+    fi
+    CUR_STAT="$(stat -c "%Y %s" "$AGY_BIN" 2>/dev/null || stat -f "%m %z" "$AGY_BIN" 2>/dev/null || echo "")"
+    mkdir -p "$(dirname "$STAMP_FILE")" 2>/dev/null || true
+    echo "$CUR_STAT" > "$STAMP_FILE" 2>/dev/null || true
+fi
+
+# 6. Transparent execution of the official Google Antigravity CLI binary
+# If terminal is attached or arguments provided, launch Antigravity CLI directly
+if [[ -t 0 || $# -gt 0 ]]; then
+    exec "$AGY_BIN" "$@"
+else
+    # Non-interactive invocation with zero arguments (automated test probe / non-TTY capture)
+    exec "$AGY_BIN" --help 2>&1
+fi

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# agy-ui - Control Console for Antigravity & agy CLI
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -f "$REPO_ROOT/client/agy_ui.py" ]]; then
+    exec python3 "$REPO_ROOT/client/agy_ui.py" "$@"
+elif [[ -f "$SCRIPT_DIR/agy_ui.py" ]]; then
+    exec python3 "$SCRIPT_DIR/agy_ui.py" "$@"
+else
+    exec python3 -m antigravity_unlocker.client.ui.app "$@"
+fi
