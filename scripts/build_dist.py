@@ -108,12 +108,8 @@ def build_archives(server_host: Optional[str] = None) -> None:
                 vdata = json.loads(vj.read_text(encoding="utf-8"))
                 vdata["sha256_tar"] = tar_hash
                 vdata["sha256_zip"] = zip_hash
-                if target_server and target_server != "127.0.0.1":
-                    vdata["archive_tar"] = f"http://{target_server}/antigravity-bypass-client.tar.gz"
-                    vdata["archive_zip"] = f"http://{target_server}/antigravity-bypass-client.zip"
-                else:
-                    vdata["archive_tar"] = "/antigravity-bypass-client.tar.gz"
-                    vdata["archive_zip"] = "/antigravity-bypass-client.zip"
+                vdata["archive_tar"] = "/antigravity-bypass-client.tar.gz"
+                vdata["archive_zip"] = "/antigravity-bypass-client.zip"
                 vj.write_text(json.dumps(vdata, indent=2) + "\n", encoding="utf-8")
             except Exception as e:
                 print(f"[!] Warning: failed updating {vj}: {e}")
@@ -141,7 +137,14 @@ def build_archives(server_host: Optional[str] = None) -> None:
         for p in [tar_path, zip_path]:
             safe_web_copy(p, web_dist / p.name)
         if (PROJECT_ROOT / "version.json").exists():
-            safe_web_copy(PROJECT_ROOT / "version.json", web_dist / "version.json")
+            try:
+                web_vdata = json.loads((PROJECT_ROOT / "version.json").read_text(encoding="utf-8"))
+                if target_server and target_server != "127.0.0.1":
+                    web_vdata["archive_tar"] = f"http://{target_server}/antigravity-bypass-client.tar.gz"
+                    web_vdata["archive_zip"] = f"http://{target_server}/antigravity-bypass-client.zip"
+                (web_dist / "version.json").write_text(json.dumps(web_vdata, indent=2) + "\n", encoding="utf-8")
+            except Exception as ex:
+                print(f"[!] Warning: could not write {web_dist / 'version.json'}: {ex}")
 
         sh_path = PROJECT_ROOT / "install.sh"
         if sh_path.exists():

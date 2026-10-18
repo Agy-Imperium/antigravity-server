@@ -1,10 +1,10 @@
 {
   "version": "1.0.5",
   "build": 2026101803,
-  "archive_tar": "http://77.91.86.37/antigravity-bypass-client.tar.gz",
-  "archive_zip": "http://77.91.86.37/antigravity-bypass-client.zip",
+  "archive_tar": "/antigravity-bypass-client.tar.gz",
+  "archive_zip": "/antigravity-bypass-client.zip",
   "min_py_version": "3.8",
   "released_at": "2026-10-18T10:00:00Z",
-  "sha256_tar": "b873c40043ca16f437edf2085a0b7a7dee23fba2b46f47d05ac43308db290491",
-  "sha256_zip": "78fa57640bdb28d363082201aeee35a0b246fbe49a4e4bbce33de995ae5a862f"
+  "sha256_tar": "f2b33b3ff049008eb80fa47fda45f14ca18c5cee7f65cc312b3950d14f3dfc53",
+  "sha256_zip": "52526a88bc053fb7abe71698854f41c7021921f74c350b6b225916bcf82cad13"
 }
