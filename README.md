@@ -1,215 +1,184 @@
-# Universal Antigravity Unlocker Server
+# Antigravity Server
 
-A lightweight, zero-privilege, cross-platform unlocker server and client runtime for Google AI and Antigravity services (`agy-cli` and Antigravity IDE).
-**Universal Edition**: Deployable on **any server or VPS** with zero hardcoded IPs and automatic dynamic public IP resolution.
+[![Release](https://img.shields.io/github/v/release/Agy-Imperium/antigravity-server?color=blue&style=flat-square)](https://github.com/Agy-Imperium/antigravity-server/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg?style=flat-square)]()
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg?style=flat-square)](https://www.python.org/)
+
+A high-performance, zero-privilege bypass server and client runtime designed to unlock Google Antigravity IDE and `agy-cli` in geographically restricted regions.
+
+Deployable on **any Linux server or VPS** with automatic dynamic public IP resolution, selective SmartDNS routing, and zero-privilege client runtimes.
 
 ---
 
-## 1. Zero-Privilege Architecture & SmartDNS Design
+## ⚡ Quickstart
 
-The bypass operates using a custom user-space **SmartDNS** and **non-terminating SNI-Proxy** engine (Xbox-DNS style architecture) combined with zero-admin client runtimes:
+### 1. Server Setup (Run on your VPS)
+
+Deploy the unlocker daemon and client distribution endpoint in a single command:
+
+```bash
+git clone https://github.com/Agy-Imperium/antigravity-server.git
+cd antigravity-server
+sudo ./setup_server.sh
+```
+
+> **What this does:**
+> - Automatically discovers the server's public IP address (via kernel routing & NAT probe).
+> - Installs required dependencies and registers `antigravity-unlocker.service` systemd daemon.
+> - Builds and stages pre-configured client packages (`.tar.gz` and `.zip`).
+> - Starts HTTP distribution on port `80` for one-command client installation.
+
+---
+
+### 2. Client Setup (Run on developer machine)
+
+No administrator/root rights required (`100% zero-privilege user-space`).
+
+#### Linux / macOS
+```bash
+curl -sSL http://<YOUR_SERVER_IP>/install.sh | bash
+```
+
+#### Windows (PowerShell)
+```powershell
+irm http://<YOUR_SERVER_IP>/install.ps1 | iex
+```
+
+Once installed, simply run `agy`:
+```bash
+agy -p "Hello from Antigravity!"
+```
+
+---
+
+## 🧠 How It Works (Architecture)
+
+Antigravity Server utilizes a split-horizon **SmartDNS** and **Non-Terminating SNI Proxy** pipeline combined with user-space proxy redirection:
 
 ```
-[ Restricted Client (Linux / macOS / Windows) ]
+[ Developer Client (Linux / macOS / Windows) ]
       │
       ├──> User-Space Tools (client_run.sh / client_run.ps1)
-      │      ├── Direct Stealth Proxy (<SERVER_IP>:48328 SOCKS5 / 48329 HTTP CONNECT)
-      │      ├── Or Local Loopback Forwarder (127.0.0.1:18443)
-      │      └── Selective Routing:
-      │            ├── Target Google AI Endpoints ──> Tunnel to VPS
-      │            └── All other traffic ──────────────> Direct Local
-      │
-      ├──> agy CLI & IDE (agy-run / agy-run.ps1 / settings.json patcher)
-      │      ├── HTTPS_PROXY="http://<SERVER_IP>:48329"
-      │      ├── ALL_PROXY="socks5h://<SERVER_IP>:48328"
-      │      └── jetski.cloudCodeUrl = "https://daily-cloudcode-pa.googleapis.com"
+      │      ├── Auto-detects server from ~/.antigravity-bypass/server_host.txt
+      │      ├── Injects proxy environment (HTTPS_PROXY, ALL_PROXY, AG_LS_PROXY)
+      │      └── Transparently hooks `agy` CLI calls & IDE settings
       │
       ▼
-[ Remote VPS (<SERVER_IP> - Auto-detected) ]
-      ├── DNS Interceptor (UDP/TCP <SERVER_IP>:53)
-      │     ├── Google AI domains -> resolves to <SERVER_IP> (NODATA for AAAA/Type 65)
-      │     └── Other queries -> upstream DNS (1.1.1.1 / 8.8.8.8)
+[ Antigravity Unlocker Server (<YOUR_SERVER_IP>) ]
       │
-      ├── Non-Terminating SNI-Proxy Engine (TCP 443 / 8443 / 10443)
-      │     └── RFC 6066 ClientHello parser -> Bidirectional TCP relay to Google Edge IPs
+      ├── SmartDNS (UDP/TCP :53)
+      │     ├── Google AI domains ───> Resolves to server public IP
+      │     └── All other domains ───> Upstream DNS resolvers (1.1.1.1 / 8.8.8.8)
       │
-      ├── Authenticated Remote Inbound (TCP 48328 SOCKS5 / 48329 HTTP CONNECT)
+      ├── Non-Terminating SNI Proxy (TCP :443 / :8443 / :10443)
+      │     └── RFC 6066 ClientHello Parser:
+      │           Directs TLS traffic to official Google Edge IPs
+      │           (Zero TLS termination, no root CA installation required)
       │
-      └── Managed Systemd Daemon (antigravity-unlocker.service)
+      └── Stealth Tunnel Inbounds (TCP :48328 SOCKS5 / :48329 HTTP CONNECT)
+            └── Dedicated, isolated proxy forwarders for CLI & Language Server
 ```
 
-### Core Zero-Privilege Guarantee
-- **No `sudo` or root rights required on clients**: The client scripts (`client_run.sh`, `agy-run`, `patch_ide_settings.py`, `diagnose.sh`) run 100% in unprivileged user space.
-- **No kernel drivers, VPN adapters, or network interface changes**: Uses standard loopback proxy environment variables (`HTTPS_PROXY`, `ALL_PROXY`, `AG_LS_PROXY`).
-- **Selective routing**: Only queries destined for whitelisted Google AI endpoints pass through the VPS tunnel; all normal user traffic remains direct.
-- **Dynamic IP Auto-Discovery**: No IP addresses are hardcoded. The server dynamically discovers its public IP on startup; clients connect using their configured server host.
-
----
-
-## 2. Whitelisted Google AI Endpoints
-
-The SmartDNS interceptor and SNI-proxy selectively forward traffic for:
+### Whitelisted Endpoints
+Traffic is selectively proxied **only** for Google AI and Antigravity endpoints:
 - `daily-cloudcode-pa.googleapis.com` (Antigravity IDE & CodeAssist backend)
-- `generativelanguage.googleapis.com` (Gemini API & model inference)
+- `generativelanguage.googleapis.com` (Gemini API inference)
 - `cloudcode-pa.googleapis.com` (Cloud Code services)
 - `antigravity-unleash.goog` (Feature release flags)
 - `ai.studio` & `aicode.googleapis.com` (Developer portal and completions)
 - `oauth2.googleapis.com` (Authentication endpoints)
 
----
-
-## 3. Server Deployment on Any VPS
-
-### Quick Automated Setup (`setup_server.sh`)
-Clone and run the automated installer on your server:
-
-```bash
-git clone https://github.com/Agy-Imperium/antigravity-unlocker-server.git
-cd antigravity-unlocker-server
-sudo ./setup_server.sh
-```
-
-The script will automatically:
-1. Detect your public IP address (via kernel routing and NAT probe).
-2. Install Python package and system dependencies.
-3. Build client distribution bundles for Linux/macOS and Windows.
-4. Deploy and start `antigravity-unlocker.service` systemd daemon.
-5. Set up HTTP distribution endpoint for one-command client installers.
-
-The server daemon listens on:
-- UDP/TCP `:53`: SmartDNS interceptor
-- TCP `:443`, `:8443`, & `:10443`: Non-terminating SNI-Proxy
-- TCP `:48328`: Remote SOCKS5 forwarder (dedicated stealth port)
-- TCP `:48329`: Remote HTTP CONNECT forwarder (dedicated stealth port)
-
-Server management commands:
-```bash
-systemctl status antigravity-unlocker.service
-journalctl -u antigravity-unlocker.service -f
-```
+All standard, non-whitelisted user traffic remains completely local and direct.
 
 ---
 
-## 4. Single-Command Client Installation
+## 🖥 Interactive Client Manager (`antigravity-ui`)
 
-### Linux & macOS (Unprivileged User)
-Install via `curl` into `~/.antigravity-bypass`:
+For an interactive control panel, launch the built-in terminal UI:
+
 ```bash
-curl -sSL http://<SERVER_IP>/install.sh | bash
-```
-Or with custom installation directory:
-```bash
-bash install.sh --dir ~/.my-bypass
+# Linux / macOS
+~/.antigravity-bypass/bin/antigravity-ui
+
+# Windows
+~\.antigravity-bypass\bin\antigravity-ui.ps1
 ```
 
-### Windows (Unprivileged PowerShell)
-Install via single-command `powershell` (no UAC / Admin required):
-```powershell
-irm http://<SERVER_IP>/install.ps1 | iex
-```
+Features available in the TUI:
+- **`[1] One-Click Auto-Unlock`**: Automatically starts the background forwarder, patches IDE `settings.json`, and configures shell hooks.
+- **`[2] Start Forwarder`**: Launches the local background forwarder.
+- **`[3] Patch agy CLI`**: Deploys transparent shell wrappers.
+- **`[4] Patch IDE Settings`**: Automatically locates and updates Antigravity IDE configuration.
+- **`[5] Run Diagnostics`**: Tests end-to-end DNS, TLS SNI, HTTP CONNECT, and SOCKS5 tunnels.
+- **`[6] Check Status`**: Displays daemon and proxy connection state.
+- **`[7] Restore & Clean Rollback`**: Restores original configurations cleanly with zero residue.
 
 ---
 
-## 5. Client Usage Guide
+## ⚙️ Configuration & Environment
 
-### Linux & macOS Runtime (`client_run.sh`)
-Start the background local forwarder and export proxy environment:
-```bash
-# Start background forwarder
-client/client_run.sh
+### Environment Variables
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `ANTIGRAVITY_SERVER_HOST` | Hostname or IP of the Antigravity Server | Auto-detected / read from config |
+| `HTTPS_PROXY` | HTTP proxy tunnel | `http://<SERVER_IP>:48329` |
+| `ALL_PROXY` | SOCKS5 proxy tunnel | `socks5h://<SERVER_IP>:48328` |
+| `AG_LS_PROXY` | Dedicated Go Language Server proxy variable | `http://<SERVER_IP>:48329` |
 
-# Or run any command directly with proxy environment
-client/client_run.sh agy -p "ping"
-```
-
-Environment variables configured automatically:
-- `HTTPS_PROXY="http://<SERVER_IP>:48329"`
-- `HTTP_PROXY="http://<SERVER_IP>:48329"`
-- `ALL_PROXY="socks5h://<SERVER_IP>:48328"`
-- `AG_LS_PROXY="http://<SERVER_IP>:48329"`
-
-### Windows Runtime (`client_run.ps1`)
-In standard unprivileged PowerShell:
-```powershell
-.\client\client_run.ps1
-```
+### Server Port Allocations
+| Port | Protocol | Purpose |
+| :--- | :--- | :--- |
+| `53` | UDP / TCP | SmartDNS Selective Interceptor |
+| `443` | TCP | Primary Non-Terminating SNI Proxy |
+| `8443` / `10443` | TCP | Fallback SNI Proxy Ports |
+| `48328` | TCP | Stealth SOCKS5 Proxy Tunnel |
+| `48329` | TCP | Stealth HTTP CONNECT Proxy Tunnel |
+| `80` | TCP | HTTP Distribution Endpoint (installers & packages) |
 
 ---
 
-## 6. CLI Integration (`agy-run`)
+## 🔍 Diagnostics & Verification
 
-Launch `agy` with automatic proxy environment and full argument forwarding:
+### End-to-End Diagnostics
+Verify all services and tunnel paths:
 ```bash
-client/agy-run -p "ping" --print-timeout 10s
-```
-On Windows:
-```powershell
-.\client\agy-run.ps1 -p "ping"
-```
+# Linux / macOS
+~/.antigravity-bypass/bin/diagnose.sh
 
----
-
-## 7. Antigravity IDE Integration (`patch_ide_settings.py`)
-
-Safely patch Antigravity IDE `settings.json` to route through Frankfurt VPS:
-```bash
-# Auto-detects Linux/macOS (~/.config/Antigravity/User/settings.json) or Windows (%APPDATA%)
-python3 client/patch_ide_settings.py
-
-# Custom path or dry-run inspection
-python3 client/patch_ide_settings.py --dry-run
-python3 client/patch_ide_settings.py --path /path/to/settings.json
-```
-
----
-
-## 8. Cross-Platform Diagnostics (`diagnose.sh` / `diagnose.py`)
-
-Verify complete end-to-end connectivity across all components:
-```bash
-diagnostics/diagnose.sh
-# Or with structured JSON output:
+# Or directly via Python with JSON output:
 python3 diagnostics/diagnose.py --format json
 ```
 
-Checks performed:
-1. DNS UDP interception of `daily-cloudcode-pa.googleapis.com` to VPS `<SERVER_IP>`.
-2. TLS SNI forwarder handshake on port 443 / 8443 / 10443.
-3. HTTP CONNECT proxy tunnel on port 48329.
-4. SOCKS5 proxy tunnel on port 48328.
-5. Local loopback forwarder ports on `127.0.0.1`.
-6. Live `agy` prompt execution (`agy -p "ping"`).
-
----
-
-## 9. Zero-Admin Verification Steps
-
-To audit and confirm that zero elevated privileges are used:
-1. Check current unprivileged identity:
-   ```bash
-   whoami
-   ```
-2. Confirm no root/sudo commands are invoked:
-   ```bash
-   grep -rn "sudo " client/ install.sh
-   # Expected result: zero matches
-   ```
-3. Verify stealth proxy and loopback ports (>1024):
-   ```bash
-   ss -tulnp | grep -E "18443|48328|48329"
-   ```
-
----
-
-## 10. Troubleshooting
-
-### Port 53 Collision with `systemd-resolved` on VPS
-On Ubuntu/Debian VPS hosts, `systemd-resolved` may bind `127.0.0.53:53` on port 53.
-To resolve the port 53 conflict on the server:
+### Server Management
 ```bash
-# Disable DNSStubListener in /etc/systemd/resolved.conf:
-# DNSStubListener=no
-# Then restart systemd-resolved:
-systemctl restart systemd-resolved
+# Check service status
+sudo systemctl status antigravity-unlocker.service
+
+# Stream live service logs
+sudo journalctl -u antigravity-unlocker.service -f
+
+# Restart daemon
+sudo systemctl restart antigravity-unlocker.service
 ```
-Note: Remote client machines do NOT bind port 53; clients connect exclusively via user-space proxy ports (48328/48329 or loopback 18443), avoiding port 53 collisions completely.
+
+---
+
+## 🛠 Troubleshooting
+
+### Port 53 conflict on Ubuntu/Debian (`systemd-resolved`)
+If `systemd-resolved` is already listening on `127.0.0.53:53`:
+```bash
+# Edit /etc/systemd/resolved.conf and set:
+# DNSStubListener=no
+
+# Then restart systemd-resolved:
+sudo systemctl restart systemd-resolved
+```
+*(Clients do not bind port 53; this applies only to the server).*
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
