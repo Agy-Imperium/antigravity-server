@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -139,10 +140,34 @@ def build_archives(server_host: Optional[str] = None) -> None:
 
         for p in [tar_path, zip_path]:
             safe_web_copy(p, web_dist / p.name)
-        for fname in ["version.json", "install.sh", "install.ps1"]:
-            fpath = PROJECT_ROOT / fname
-            if fpath.exists():
-                safe_web_copy(fpath, web_dist / fname)
+        if (PROJECT_ROOT / "version.json").exists():
+            safe_web_copy(PROJECT_ROOT / "version.json", web_dist / "version.json")
+
+        sh_path = PROJECT_ROOT / "install.sh"
+        if sh_path.exists():
+            sh_content = sh_path.read_text(encoding="utf-8")
+            if target_server:
+                sh_content = re.sub(
+                    r'SERVER="\$\{ANTIGRAVITY_SERVER_HOST:-\}"',
+                    f'SERVER="${{ANTIGRAVITY_SERVER_HOST:-{target_server}}}"',
+                    sh_content,
+                )
+            (web_dist / "install.sh").write_text(sh_content, encoding="utf-8")
+            try:
+                (web_dist / "install.sh").chmod(0o755)
+            except Exception:
+                pass
+
+        ps_path = PROJECT_ROOT / "install.ps1"
+        if ps_path.exists():
+            ps_content = ps_path.read_text(encoding="utf-8")
+            if target_server:
+                ps_content = re.sub(
+                    r'\[string\]\$Server = "",',
+                    f'[string]$Server = "{target_server}",',
+                    ps_content,
+                )
+            (web_dist / "install.ps1").write_text(ps_content, encoding="utf-8")
         print(f"[+] Synced artifacts to {web_dist}")
 
     # Clean up staging
