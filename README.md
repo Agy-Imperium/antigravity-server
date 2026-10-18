@@ -33,19 +33,43 @@ sudo ./setup_server.sh
 
 ### 2. Client Setup (Run on developer machine)
 
-No administrator/root rights required (`100% zero-privilege user-space`).
+Zero administrator or root rights required (`100% user-space`). Choose any of the following methods:
 
-#### Linux / macOS
-```bash
-curl -sSL http://<YOUR_SERVER_IP>/install.sh | bash
-```
+#### Method A: One-Command from Server (Recommended)
+If your server's HTTP distribution port `80` is reachable, the installer automatically detects the server address:
 
-#### Windows (PowerShell)
-```powershell
-irm http://<YOUR_SERVER_IP>/install.ps1 | iex
-```
+- **Linux / macOS:**
+  ```bash
+  curl -sSL http://<YOUR_SERVER_IP>/install.sh | bash
+  ```
+- **Windows (PowerShell):**
+  ```powershell
+  irm http://<YOUR_SERVER_IP>/install.ps1 | iex
+  ```
 
-Once installed, simply run `agy`:
+#### Method B: Direct from GitHub
+If port `80` on the server is behind a firewall, install directly from GitHub while specifying your server address:
+
+- **Linux / macOS:**
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/Agy-Imperium/antigravity-server/main/install.sh | bash -s -- --server <YOUR_SERVER_IP>
+  ```
+  *(or via environment variable: `ANTIGRAVITY_SERVER_HOST=<YOUR_SERVER_IP> bash -c "$(curl -sSL https://raw.githubusercontent.com/Agy-Imperium/antigravity-server/main/install.sh)"`)*
+- **Windows (PowerShell):**
+  ```powershell
+  $env:ANTIGRAVITY_SERVER_HOST="<YOUR_SERVER_IP>"; irm https://raw.githubusercontent.com/Agy-Imperium/antigravity-server/main/install.ps1 | iex
+  ```
+
+#### Method C: Manual / Offline from GitHub Releases
+1. Download `antigravity-bypass-client.zip` (Windows) or `antigravity-bypass-client.tar.gz` (Linux/macOS) from [Releases](https://github.com/Agy-Imperium/antigravity-server/releases).
+2. Extract to `~/.antigravity-bypass` (on Windows: `%USERPROFILE%\.antigravity-bypass`).
+3. Create a text file `server_host.txt` in that directory containing your server IP or domain (e.g. `1.2.3.4`).
+4. Run `~/.antigravity-bypass/bin/agy-ui` (or `.\bin\agy-ui.ps1`) and select **`[1] One-Click Auto-Unlock`**.
+
+---
+
+### Verification
+Once installed, simply run `agy` in your terminal:
 ```bash
 agy -p "Hello from Antigravity!"
 ```
